@@ -43,7 +43,7 @@ sigma3 = sigma20*ones(M,N+1);
 
 for i = 1:N
     sigma3(:,i+1) = sigma3(:,i) + kappa*(theta-sigma3(:,i))*h ...
-        + nu*sqrt(abs(sigma3(:,i))).*dW2(:,i)+1/4*nu^2.*(dW2(:,i).^2-h);
+        + nu*sqrt(abs(sigma3(:,i))).*dW2(:,i)+1/4*nu.*(dW2(:,i).^2-h);
     S1(:,i+1) = S1(:,i).*(1 + r*h + sqrt(abs(sigma3(:,i))).*dW1(:,i))+1/2*sigma3(:,i).*S1(:,i).*(dW1(:,i).^2-h);
 end
 
