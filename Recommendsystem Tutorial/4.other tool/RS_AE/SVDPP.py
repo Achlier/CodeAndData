@@ -1,0 +1,100 @@
+import sys
+
+sys.path.append(r'RSA/')
+sys.path.append(r'RSA')
+from RSA import run_func
+import numpy as np
+
+
+class SVDPP:
+    def __init__(self, factors=10):
+        self.factors = factors
+
+    def init_model(self, rs):
+        rs.read_rating(rs)
+        rs.lambdaY = 0.001
+        rs.lambdaB = 0.001
+        rs.Bu = np.random.rand(rs.rg.get_train_size()[0]) / (rs.rg.config.factor ** 0.5
+                                                             )  # bias value of user
+        rs.Bi = np.random.rand(rs.rg.get_train_size()[1]) / (rs.rg.config.factor ** 0.5
+                                                             )  # bias value of item
+        rs.P = np.random.rand(rs.rg.get_train_size()[0], rs.rg.config.factor) / (
+                rs.rg.config.factor ** 0.5)  # latent user matrix 随机初始化 u行,latent列(10)
+        rs.Q = np.random.rand(rs.rg.get_train_size()[1], rs.rg.config.factor) / (
+                rs.rg.config.factor ** 0.5)  # latent item matrix 随机初始化 i行,latent列(10)
+        rs.Y = np.random.rand(rs.rg.get_train_size()[1], rs.rg.config.factor) / (
+                rs.rg.config.factor ** 0.5)  # implicit preference
+        rs.SY = dict()
+
+    def train_model(self, rs, k):
+        iteration = 0
+        while iteration < rs.rg.config.maxIter:
+            rs.loss = 0
+            for index, line in enumerate(rs.rg.trainSet(k)):
+                user, item, rating = line
+                u = rs.rg.user[user]  # u index
+                i = rs.rg.item[item]  # i index
+                error = rating - rs.predict_rs(rs, u=user, i=item)
+                rs.loss += error ** 2
+
+                p, q = rs.P[u], rs.Q[i]
+                nu, sum_y = self.get_sum_y(
+                    rs, user)  # number of nei_items, item implicit preference
+
+                # update latent vectors
+                rs.P[u] += rs.rg.config.lr * (error * q - rs.rg.config.lambdaP * p)
+                rs.Q[i] += rs.rg.config.lr * (error *
+                                              (p + sum_y) - rs.rg.config.lambdaQ * q)
+
+                rs.Bu[u] += rs.rg.config.lr * (error - rs.lambdaB * rs.Bu[u])
+                rs.Bi[i] += rs.rg.config.lr * (error - rs.lambdaB * rs.Bi[i])
+
+                u_items = rs.rg.user_rated_items(u)
+                for j in u_items:
+                    idj = rs.rg.item[j]
+                    rs.Y[idj] += rs.rg.config.lr * (error / np.sqrt(nu) * q -
+                                                    rs.lambdaY * rs.Y[idj])
+
+            rs.loss += rs.rg.config.lambdaP * (rs.P * rs.P).sum(
+            ) + rs.rg.config.lambdaQ * (rs.Q * rs.Q).sum() + rs.lambdaB * (
+                               (rs.Bu * rs.Bu).sum() +
+                               (rs.Bi * rs.Bi).sum()) + rs.lambdaY * (rs.Y *
+                                                                      rs.Y).sum()  # get loss
+            iteration += 1
+            if rs.isConverged_rs(iteration, rs, k):
+                break
+
+    def predict(self, rs, u, i):
+        if rs.rg.containsUser(u) and rs.rg.containsItem(i):
+            _, sum_y = self.get_sum_y(rs, u)
+            u = rs.rg.user[u]
+            i = rs.rg.item[i]
+            return rs.Q[i].dot(
+                rs.P[u] +
+                sum_y) + rs.rg.globalMean + rs.Bi[i] + rs.Bu[u]  # 多了个y
+        else:
+            return rs.rg.globalMean
+
+    def get_sum_y(self, rs, u):
+        if u in rs.SY:  # 有就直接返回
+            return rs.SY[u]
+        u_items = rs.rg.user_rated_items(u)  # item_id list
+        nu = len(u_items)  # number of items
+        sum_y = np.zeros(rs.rg.config.factor)  # factors vector
+        for j in u_items:
+            sum_y += rs.Y[rs.rg.item[
+                j]]  # item implicit preference of (self.rg.item[j] =) item_j index
+        sum_y /= (np.sqrt(nu))  # get mean
+        rs.SY[u] = [
+            nu, sum_y
+        ]  # user_id : [ number of items, item implicit preference ]
+        return nu, sum_y
+
+    def recommend(self, rs, user, num_items=5):
+        recommend_dict = {}
+        for item in rs.rg.all_Item.keys():
+            prediction = self.predict(rs, user, item)  # 预测-返回一个分数
+            if item not in rs.rg.trainSet_u[user]:
+                recommend_dict[item] = prediction
+        recommend_list = sorted(recommend_dict.items(), key=lambda item: item[1], reverse=True)
+        return recommend_list[:num_items]
