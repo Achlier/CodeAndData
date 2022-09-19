@@ -1,0 +1,5 @@
+WARNING:root:This is a warning log.
+DEBUG:mylogger:debug message
+ERROR:mylogger:error message
+DEBUG:mylogger:debug message
+ERROR:mylogger:error message
