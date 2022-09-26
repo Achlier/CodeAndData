@@ -8,6 +8,7 @@
 - Matlab
 - 吴恩达机器学习
 - Applied Computational Finance Lab
+- SQL
 - Python
   - Matplotlib可视化案例
   - 拓展学习
